@@ -1,13 +1,14 @@
-import PIL.Image
 import math
 import os
-import requests
 import sys
+import PIL.Image
+import jpegio
+import requests
 
-download_zoom = 18
+download_zoom = 16
 download_region = [
-    [40.8124, -74.0221],
-    [40.6968, -73.9243]
+    [-2, -2],
+    [2, 2]
 ]
 
 def get_tile_coord(lat_lon,zoom):
@@ -114,7 +115,33 @@ def merge_tiles(final_resolution,cache,remove_processed):
             os.remove(current_tile)
         print(f"Merging Progress: {str(current_index)}/?")
     print("--- SAVING ---")
-    final_image.save(f"{cache}/final.png")
+    final_image.save(f"{cache}/final.jpg")
+
+def test_merge_tiles(final_resolution,cache,remove_processed):
+    print("--- ALLOCATING ---")
+    allocated_image = PIL.Image.new("RGB",final_resolution,(0,0,255))
+    allocated_image.save(f"{cache}/final.jpg")
+    print("--- MERGING ---")
+    current_index = 0
+    for current_tile in os.listdir(cache):
+        if (not current_tile.endswith(".tmppng")):
+            continue
+        current_state = jpegio.read(f"{cache}/final.jpg")
+        current_index = (current_index + 1)
+        split_name = current_tile.split("-")
+        split_name[1] = split_name[1][:-7]
+        current_tile = f"{cache}/{current_tile}"
+        current_image = PIL.Image.open(current_tile,"r").convert("RGB")
+        current_pixels = current_image.load()
+        print(split_name)
+        for x in range(256):
+            draw_x = (x + (int(split_name[0]) + 256))
+            for y in range(256):
+                draw_y = (y + (int(split_name[1]) + 256))
+                r,g,b = current_pixels[x,y]
+                current_state.coef_arrays[0][draw_y][draw_x] = r
+                current_state.coef_arrays[1][draw_y // 2][draw_x // 2] = g
+                current_state.coef_arrays[2][draw_y // 2][draw_x // 2] = b
+        jpegio.write(current_state,f"{cache}/final.jpg")
 
 start_download()
-#merge_tiles((128256,128256),"cache1",False)

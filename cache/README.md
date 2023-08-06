@@ -1,0 +1,1 @@
+This is the storage directory for downloaded tiles and the final image (final.jpg).
