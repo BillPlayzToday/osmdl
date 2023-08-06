@@ -161,4 +161,4 @@ cython_debug/
 
 
 # Custom
-cache/cache*
+src/cache/cache*
