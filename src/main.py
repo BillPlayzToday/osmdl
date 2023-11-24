@@ -1,14 +1,18 @@
 import math
 import os
 import sys
+import multiprocessing
 import PIL.Image
-import requests
+import time
 
-download_zoom = 16
+import download_thread
+
+download_zoom = 18
 download_region = [
-    [53.7406,9.7284],
-    [53.3571,10.3038]
+    [40.8951,-74.0516],
+    [40.6884,-73.8621]
 ]
+download_processes = 4
 
 def get_tile_coord(lat_lon,zoom):
     latitude_radians = math.radians(lat_lon[0])
@@ -23,6 +27,15 @@ def get_lat_lon(tile_coord,zoom):
     lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * tile_coord[1] / tile_size)))
     lat_deg = math.degrees(lat_rad)
     return lat_deg,lon_deg
+
+def get_split_list(split_list,chunks):
+    chunk_size = math.ceil(len(split_list) / chunks)
+    final_list = []
+
+    for part in range(0,len(split_list),chunk_size):
+        final_list.append(split_list[part:part + chunk_size])
+
+    return final_list
 
 def create_cache_location():
     iteration = 0
@@ -63,32 +76,41 @@ def start_download():
 
     print("--- DOWNLOADING ---")
     cache_location = create_cache_location()
-    session = requests.Session()
+    download_list = []
 
-    current_index = 0
     for current_tile in download_tiles:
-        current_index = (current_index + 1)
-
-        response = session.request(
-            method = "GET",
-            url = (f"https://tile.openstreetmap.org/{download_zoom}/{current_tile[0]}/{current_tile[1]}.png"),
-            headers = {
-                "User-Agent": "_ / 1.0 _"
-            }
-        )
-        if (not response.ok):
-            print(f"Failed Tile: {current_tile[0]},{current_tile[1]} Status: {str(response.status_code)}")
-            sys.exit(1)
-        print(f"Download Progress: {str(current_index)}/{str(len(download_tiles))}")
         relative_position = (
             (current_tile[0] - start_tile[0]),
             (current_tile[1] - start_tile[1])
         )
-        file_path = f"{cache_location}/{str(relative_position[0])}-{str(relative_position[1])}.tmppng"
-        open_file = open(file_path,"ab")
-        open_file.write(response.content)
-        open_file.flush()
-        open_file.close()
+        download_list.append([
+            f"https://tile.openstreetmap.org/{download_zoom}/{current_tile[0]}/{current_tile[1]}.png",
+            f"{str(relative_position[0])}-{str(relative_position[1])}.tmppng"
+        ])
+
+    download_splits = get_split_list(download_list,download_processes)
+
+    current_index = -1
+    active_download_processes = []
+    for download_task in download_splits:
+        current_index = (current_index + 1)
+        new_process = multiprocessing.Process(
+            target = download_thread.download_images,
+            args = (download_task,cache_location,f"Process Index {str(current_index)}")
+        )
+        active_download_processes.append(new_process)
+        new_process.start()
+    
+    while True:
+        for running_process in active_download_processes:
+            if (not running_process.is_alive()):
+                active_download_processes.remove(running_process)
+                print("--- DEAD DOWNLOAD PROCESS ---")
+
+        if (len(active_download_processes) == 0):
+            break
+
+        time.sleep(1)
 
     merge_tiles(final_resolution,cache_location,False)
 
