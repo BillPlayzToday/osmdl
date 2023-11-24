@@ -6,8 +6,8 @@ import requests
 
 download_zoom = 16
 download_region = [
-    [35.2198, -106.7926],
-    [35.0261, -106.4465]
+    [53.7406,9.7284],
+    [53.3571,10.3038]
 ]
 
 def get_tile_coord(lat_lon,zoom):
